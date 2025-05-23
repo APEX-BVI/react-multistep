@@ -11,84 +11,111 @@ const getTopNavStyles = (activeStep: number, length: number): string[] => {
 }
 
 const getBottomNavState = (activeStep: number, length: number, stepIsValid: boolean) => {
-  if (activeStep === 0) {
-    return {
-      prevDisabled: true,
-      nextDisabled: !stepIsValid,
-      hideLast: false
-    }
-  }
-  if (activeStep > 0 && activeStep < (length - 1)) {
-    return {
-      prevDisabled: false,
-      nextDisabled: !stepIsValid,
-      hideLast: false
-    }
-  }
   return {
-    prevDisabled: false,
+    prevDisabled: activeStep === 0,
     nextDisabled: !stepIsValid,
-    hideLast: true
+    hideLast: activeStep === length - 1
+  }
+}
+
+const getFlexDirection = (position: string): 'row' | 'row-reverse' | 'column' | 'column-reverse' => {
+  switch (position) {
+    case 'left':
+      return 'row-reverse'
+    case 'right':
+      return 'row'
+    case 'above':
+      return 'column-reverse'
+    case 'below':
+    default:
+      return 'column'
   }
 }
 
 export default function MultiStep(props: MultiStepProps) {
   let { children } = props
-  if (!children) throw TypeError("Error: Application has no children Components configured")
+  if (!children || children.length === 0)
+    throw TypeError("Error: Application has no children Components configured")
 
-  const styles = typeof props.styles === 'undefined' ? BaseStyles as MultiStepStyles : props.styles
+  const styles: MultiStepStyles = props.styles ?? BaseStyles
   const [activeChild, setActive] = useState(0)
   const [childIsValid, setChildIsValid] = useState(false)
-  const [topNavState, setTopNavState] = useState(getTopNavStyles(activeChild, children.length))
-  const [bottomNavState, setBottomNavState] = useState(getBottomNavState(activeChild, children.length, childIsValid))
+  const [topNavState, setTopNavState] = useState(getTopNavStyles(0, children.length))
+  const [bottomNavState, setBottomNavState] = useState(getBottomNavState(0, children.length, false))
 
   useEffect(() => {
     setTopNavState(getTopNavStyles(activeChild, children.length))
     setBottomNavState(getBottomNavState(activeChild, children.length, childIsValid))
-  }, [activeChild, childIsValid])
+  }, [activeChild, childIsValid, children.length])
 
-  const childStateChanged = (childState: ChildState) => setChildIsValid(() => childState.isValid)  
-  children = React.Children.map(children, child => React.cloneElement(child, { signalParent: childStateChanged }))
+  const childStateChanged = (childState: ChildState) => setChildIsValid(childState.isValid)
+
+  children = React.Children.map(children, child =>
+    React.cloneElement(child, { signalParent: childStateChanged })
+  )
 
   const handleNext = () => {
-    if (props.onNext) {
-      props.onNext()
-    }
-    setActive(activeChild === children.length - 1 ? activeChild : activeChild + 1)
+    if (props.onNext) props.onNext()
+    setActive(prev => (prev < children.length - 1 ? prev + 1 : prev))
   }
 
   const handlePrevious = () => {
-    if (props.onPrev) {
-      props.onPrev()
-    }
-    setActive(activeChild > 0 ? activeChild - 1 : activeChild)
+    if (props.onPrev) props.onPrev()
+    setActive(prev => (prev > 0 ? prev - 1 : prev))
   }
 
-  const handleOnClick = (i: number) => childIsValid ? setActive(i) : console.log('Error: Invalid state')
+  const handleStepClick = (i: number) => {
+    if (props.disableNavigationClick) return
+    if (childIsValid) setActive(i)
+  }
 
   const renderTopNav = () =>
     <ol style={styles.topNav}>
       {children.map((c, i) =>
-        <li style={styles.topNavStep} onClick={() => handleOnClick(i)} key={i}>
-          { topNavState[i] === 'doing' ? <span style={styles.doing}>{c.props.title ?? i + 1}</span> :
-                                         <span style={styles.todo}>{c.props.title ?? i + 1}</span> }
+        <li
+          style={styles.topNavStep}
+          onClick={() => handleStepClick(i)}
+          key={i}
+        >
+          <div style={{
+            display: 'flex',
+            flexDirection: getFlexDirection(props.topNavLabelPosition ?? 'below'),
+            alignItems: 'center',
+            gap: '4px'
+          }}>
+            <div style={topNavState[i] === 'doing' ? styles.doing : styles.todo}>
+              {i + 1}
+            </div>
+            <div style={{ fontSize: '0.8rem' }}>
+              {c.props.title ?? `Step ${i + 1}`}
+            </div>
+          </div>
         </li>
       )}
     </ol>
 
-  const renderBottomNav = () =>
-    <div style={styles.section} >
-      <button onClick={handlePrevious}
-              style={styles.prevButton}
-              disabled={bottomNavState.prevDisabled}>
-        <span>&#60;</span>
-      </button>
-      <button onClick={handleNext}
-              style={bottomNavState.hideLast ? { display: 'none' } : styles.nextButton}
-              disabled={bottomNavState.nextDisabled}>
-        <span>&#62;</span>
-      </button>
-    </div>
+  const renderBottomNav = () => {
+    if (props.showNavigation === false) return null
+
+    return (
+      <div style={styles.section}>
+        <button
+          onClick={handlePrevious}
+          style={styles.prevButton}
+          disabled={bottomNavState.prevDisabled}
+        >
+          <span>&#60;</span>
+        </button>
+        <button
+          onClick={handleNext}
+          style={bottomNavState.hideLast ? { display: 'none' } : styles.nextButton}
+          disabled={bottomNavState.nextDisabled}
+        >
+          <span>&#62;</span>
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div style={styles.component}>
@@ -96,7 +123,7 @@ export default function MultiStep(props: MultiStepProps) {
       <div style={styles.section}>
         {children[activeChild]}
       </div>
-        {renderBottomNav()}
+      {renderBottomNav()}
     </div>
   )
 }
