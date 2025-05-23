@@ -16,6 +16,9 @@ export interface MultiStepProps {
   children: React.ReactElement[]
   onNext?: () => void
   onPrev?: () => void
+  showNavigation?: boolean
+  topNavLabelPosition?: 'above' | 'below' | 'left' | 'right'
+  disableNavigationClick?: boolean
 }
 
 export interface ChildState {
